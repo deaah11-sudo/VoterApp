@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الأرشفة والطباعة الذكي</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"/>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f6f9; padding: 15px; direction: rtl; margin: 0; }
+        .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .file-btn { background-color: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; text-align: center; display: block; box-sizing: border-box; }
+        .file-btn.done { background-color: #28a745; }
+        .btn-success { background-color: #17a2b8; color: white; border: none; padding: 14px; border-radius: 6px; cursor: pointer; grid-column: span 2; font-size: 16px; font-weight: bold; width: 100%; margin-top: 10px; }
+        input[type="file"] { display: none; }
+        #status { margin-top: 15px; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; display: none; }
+        .modal { display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); }
+        .modal-content { background: #fff; width: 90%; max-width: 450px; margin: 15% auto; padding: 15px; border-radius: 10px; text-align: center; }
+        .img-container { max-height: 350px; margin-bottom: 15px; overflow: hidden; }
+        .img-container img { max-width: 100%; }
+        .crop-btn { background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; width: 100%; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>نظام الأرشفة والقص اليدوي الذكي</h2>
+    <div class="form-group">
+        <label>الرقم المرجعي / الهوية:</label>
+        <input type="text" id="txtReferenceID" placeholder="أدخل الرقم المرجعي">
+    </div>
+    <div class="form-group">
+        <label>الاسم الكامل:</label>
+        <input type="text" id="txtFullName" placeholder="أدخل الاسم الكامل">
+    </div>
+    <form id="archiveForm">
+        <div class="btn-grid">
+            <label class="file-btn" id="lblFace" for="btnFace">1. التقاط/قص الوجه</label>
+            <input type="file" id="btnFace" accept="image/*" onchange="openCropper(this, 'face')">
+            <label class="file-btn" id="lblBack" for="btnBack">2. التقاط/قص الظهر</label>
+            <input type="file" id="btnBack" accept="image/*" onchange="openCropper(this, 'back')">
+            <label class="file-btn" id="lblForm" for="btnForm" style="grid-column: span 2;">3. الوثيقة الرئيسية / الاستمارة</label>
+            <input type="file" id="btnForm" accept="image/*" onchange="openCropper(this, 'form')">
+            <button type="button" class="btn-success" id="btnPDF" onclick="submitData()">4. إنشاء الأرشيف وملف الـ PDF</button>
+        </div>
+    </form>
+    <div id="status"></div>
+</div>
+<div id="cropModal" class="modal">
+    <div class="modal-content">
+        <h3>قص وتحديد حواف الصورة</h3>
+        <div class="img-container">
+            <img id="imageToCrop" src="" alt="صورة للقص">
+        </div>
+        <button type="button" class="crop-btn" onclick="cropAndSave()">حفظ وقص الصورة</button>
+    </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+    let cropper = null;
+    let currentType = '';
+    const croppedFiles = { face: null, back: null, form: null };
+    function openCropper(input, type) {
+        if (input.files && input.files[0]) {
+            currentType = type;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const image = document.getElementById('imageToCrop');
+                image.src = e.target.result;
+                document.getElementById('cropModal').style.display = 'block';
+                if (cropper) { cropper.destroy(); }
+                let aspectRatio = NaN; 
+                if (type === 'face' || type === 'back') { aspectRatio = 85.6 / 53.98; }
+                cropper = new Cropper(image, { aspectRatio: aspectRatio, viewMode: 1, autoCropArea: 0.9 });
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    function cropAndSave() {
+        if (!cropper) return;
+        const canvas = cropper.getCroppedCanvas({
+            width: currentType === 'form' ? 1200 : 1011,
+            height: currentType === 'form' ? 1600 : 638,
+        });
+        canvas.toBlob(function(blob) {
+            croppedFiles[currentType] = new File([blob], currentType + ".jpg", { type: "image/jpeg" });
+            if (currentType === 'face') { document.getElementById('lblFace').classList.add('done'); document.getElementById('lblFace').innerText = '✓ تم قص الوجه'; }
+            if (currentType === 'back') { document.getElementById('lblBack').classList.add('done'); document.getElementById('lblBack').innerText = '✓ تم قص الظهر'; }
+            if (currentType === 'form') { document.getElementById('lblForm').classList.add('done'); document.getElementById('lblForm').innerText = '✓ تم قص الاستمارة'; }
+            document.getElementById('cropModal').style.display = 'none';
+        }, 'image/jpeg', 0.95);
+    }
+    async function submitData() {
+        const refId = document.getElementById('txtReferenceID').value;
+        const fullName = document.getElementById('txtFullName').value;
+        const statusDiv = document.getElementById('status');
+        if (!refId || !fullName) { alert('يرجى كتابة الرقم المرجعي والاسم الكامل!'); return; }
+        if (!croppedFiles.face || !croppedFiles.back || !croppedFiles.form) { alert('يرجى التقاط وقص الصور الثلاث أولاً!'); return; }
+        const formData = new FormData();
+        formData.append('txtReferenceID', refId);
+        formData.append('txtFullName', fullName);
+        formData.append('fileFace', croppedFiles.face);
+        formData.append('fileBack', croppedFiles.back);
+        formData.append('fileForm', croppedFiles.form);
+        statusDiv.style.display = 'block';
+        statusDiv.style.backgroundColor = '#fff3cd';
+        statusDiv.style.color = '#856404';
+        statusDiv.innerText = 'جاري حفظ الملفات وتوليد الـ PDF...';
+        try {
+            const response = await fetch('https://voterapp-service.onrender.com/generate_pdf', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (response.ok) {
+                statusDiv.style.backgroundColor = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.innerText = result.message;
+            } else {
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerText = 'خطأ: ' + result.message;
+            }
+        } catch (err) {
+            statusDiv.style.backgroundColor = '#f8d7da';
+            statusDiv.style.color = '#721c24';
+            statusDiv.innerText = 'حدث خطأ أثناء التواصل مع السيرفر!';
+        }
+    }
+</script>
+</body>
+</html>
